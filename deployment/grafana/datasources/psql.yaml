@@ -1,0 +1,18 @@
+apiVersion: 1
+
+deleteDatasources:
+ - name: 'PostgreSQL'
+
+datasources:
+ - name: 'PostgreSQL'
+   type: 'postgres'
+   url: 'postgres'
+   user: 'user'
+   database: 'fitbit-data'
+   isDefault: true
+   version: 1
+   jsonData:
+     sslmode: 'disable'
+     postgresVersion: 906
+   secureJsonData:
+     password: 'pass1234'

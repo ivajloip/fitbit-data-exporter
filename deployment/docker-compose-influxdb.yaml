@@ -1,0 +1,81 @@
+# Copyright (C) 2019 All Rights Reserved
+# Author: Ivaylo Petrov ivajloip@gmail.com
+
+version: '2.4'
+
+# Default container logging configuration
+x-logging:
+  &default-logging
+  driver: "json-file"
+  #Rotate over 10 10MB files
+  options:
+    max-size: "10M"
+    max-file: "10"
+
+volumes:
+  influx-data:
+    driver: local
+
+services:
+  fde:
+    image: ivajloip/fitbit-data-exporter:latest
+    restart: unless-stopped
+    depends_on:
+      - influx
+    links:
+      - influx
+    environment:
+      - FDE_USERNAME=user
+      - FDE_API_DAEMON=true
+      - FDE_API_CLIENT_ID=${DOCKER_CLIENT_ID}
+      - FDE_API_CLIENT_SECRET=${DOCKER_CLIENT_SECRET}
+      - FDE_START_DATE=2019/11/11
+      - FDE_API_BIND_ADDR=0.0.0.0:${DOCKER_FDE_BIND_PORT}
+      - FDE_INFLUXDB_URL=http://influx:8086
+      - FDE_INFLUXDB_USERNAME=$DOCKER_INFLUX_USER
+      - FDE_INFLUXDB_PASSWORD=$DOCKER_INFLUX_PASS
+      - FDE_LOG_LEVEL=4
+    ports:
+      - ${DOCKER_FDE_BIND_PORT}:5556
+    volumes:
+      - "./fitbit-oauth2.json:/home/app/.config/fitbit-oauth2.json"
+    logging: *default-logging
+
+  influx:
+    image: influxdb:1.7-alpine
+    restart: unless-stopped
+    mem_limit: 250M
+    mem_reservation: 50M
+    volumes:
+      - influx-data:/var/lib/influxdb
+    environment:
+      - STDERR=/dev/null
+      - STDOUT=/dev/null
+      - INFLUXDB_DATA_QUERY_LOG_ENABLED=false
+      - INFLUXDB_HTTP_LOG_ENABLED=false
+      - INFLUXDB_REPORTING_DISABLED=true
+      - INFLUXDB_COORDINATOR_QUERY_TIMEOUT=10s
+      - INFLUXDB_DATA_INDEX_VERSION=tsi1
+    ports:
+      - "8086:8086"
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:$DOCKER_GRAFANA_TAG
+    restart: unless-stopped
+    depends_on:
+      - influx
+    environment:
+      - GF_SERVER_HTTP_PORT=8888
+      - GF_SERVER_DOMAIN=localhost
+      - GF_SERVER_PROTOCOL=http
+      - GF_SECURITY_ADMIN_PASSWORD=$DOCKER_GRAFANA_ADMIN_PASS
+    volumes:
+      - "./grafana:/etc/grafana/provisioning:ro"
+    logging: *default-logging
+
+networks:
+   default:
+     driver: bridge
+     driver_opts:
+       com.docker.network.enable_ipv6: "true"

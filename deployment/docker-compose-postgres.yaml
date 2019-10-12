@@ -1,0 +1,71 @@
+# Copyright (C) 2019 All Rights Reserved
+# Author: Ivaylo Petrov ivajloip@gmail.com
+
+version: '2.4'
+
+# Default container logging configuration
+x-logging:
+  &default-logging
+  driver: "json-file"
+  #Rotate over 10 10MB files
+  options:
+    max-size: "10M"
+    max-file: "10"
+
+volumes:
+  postgres-data:
+    driver: local
+
+services:
+  fde:
+    image: ivajloip/fitbit-data-exporter:latest
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    links:
+      - postgres
+    environment:
+      - FDE_USERNAME=user
+      - FDE_API_DAEMON=true
+      - FDE_API_CLIENT_ID=${DOCKER_CLIENT_ID}
+      - FDE_API_CLIENT_SECRET=${DOCKER_CLIENT_SECRET}
+      - FDE_START_DATE=2019/11/11
+      - FDE_API_BIND_ADDR=0.0.0.0:${DOCKER_FDE_BIND_PORT}
+      - FDE_POSTGRESQL_DSN=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}?sslmode=disable
+      - FDE_LOG_LEVEL=4
+    ports:
+      - ${DOCKER_FDE_BIND_PORT}:5556
+    volumes:
+      - "./fitbit-oauth2.json:/home/app/.config/fitbit-oauth2.json"
+    logging: *default-logging
+
+  postgres:
+    image: postgres:${DOCKER_POSTGRES_TAG}
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=$POSTGRES_DB
+      - POSTGRES_USER=$POSTGRES_USER
+      - POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:$DOCKER_GRAFANA_TAG
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      - GF_SERVER_HTTP_PORT=8888
+      - GF_SERVER_DOMAIN=localhost
+      - GF_SERVER_PROTOCOL=http
+      - GF_SECURITY_ADMIN_PASSWORD=$DOCKER_GRAFANA_ADMIN_PASS
+    volumes:
+      - "./grafana:/etc/grafana/provisioning:ro"
+    logging: *default-logging
+
+networks:
+   default:
+     driver: bridge
+     driver_opts:
+       com.docker.network.enable_ipv6: "true"
